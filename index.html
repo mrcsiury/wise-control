@@ -752,15 +752,15 @@
     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   // ══════════════════════════════════════════════════════════════
-  // 🔧 COLE AQUI AS SUAS CREDENCIAIS DO FIREBASE
+  // 🔧 CREDENCIAIS DO FIREBASE
   // ══════════════════════════════════════════════════════════════
   const firebaseConfig = {
-    apiKey: "AIzaSyARIm2bnZVJgT8-KoJ7Y1qn0I0OE7gJFw4",
-    authDomain: "wise-control-97e87.firebaseapp.com",
-    projectId: "wise-control-97e87",
-    storageBucket: "wise-control-97e87.firebasestorage.app",
+    apiKey:            "AIzaSyARIm2bnZVJgT8-KoJ7Y1qn0I0OE7gJFw4",
+    authDomain:        "wise-control-97e87.firebaseapp.com",
+    projectId:         "wise-control-97e87",
+    storageBucket:     "wise-control-97e87.firebasestorage.app",
     messagingSenderId: "484783092605",
-    appId: "1:484783092605:web:2d589f7d0712ca09259214"
+    appId:             "1:484783092605:web:2d589f7d0712ca09259214"
   };
   // ══════════════════════════════════════════════════════════════
 
@@ -802,32 +802,16 @@
     fid = data.fid || 1; vid = data.vid || 1;
   }
 
-  // Mostra loading enquanto carrega
-  document.body.insertAdjacentHTML('beforeend',
-    `<div id="fb-loading" style="position:fixed;inset:0;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
-      <svg width="48" height="48" viewBox="0 0 42 42" fill="none"><polygon points="21,2 38,11.5 38,30.5 21,40 4,30.5 4,11.5" fill="#0a1428" stroke="url(#gl)" stroke-width="1.5"/><defs><linearGradient id="gl" x1="0" y1="0" x2="42" y2="42" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#00c8ff"/><stop offset="100%" stop-color="#1a6fd4"/></linearGradient></defs><text x="21" y="28" text-anchor="middle" font-size="18" font-weight="800" fill="url(#gl)" font-family="'Barlow Condensed',Arial">W</text></svg>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:var(--blue-light)">CARREGANDO DADOS...</div>
-    </div>`
-  );
-
-  // Escuta mudanças em tempo real (sincroniza entre aparelhos)
-  onSnapshot(DOC, (snap) => {
-    applyData(snap.data());
-    document.getElementById('fb-loading')?.remove();
-    // Re-renderiza a tela ativa
+  function renderAtiva() {
     const active = document.querySelector('.section.active');
-    if(active) {
-      const id = active.id.replace('sec-','');
-      if(id==='dashboard') renderDash();
-      if(id==='produtos')  { renderProd(); }
-      if(id==='estoque')   { populateProdSel(); renderSaldo(); renderMov(); }
-      if(id==='vendas')    { populateVendaSel(); renderVendas(); }
-      if(id==='financeiro'){ renderFinStats(); renderFinTabela(); }
-    }
-  }, (err) => {
-    document.getElementById('fb-loading')?.remove();
-    showToast('Erro de conexão com o banco: ' + err.message, 'error');
-  });
+    if(!active) return;
+    const id = active.id.replace('sec-','');
+    if(id==='dashboard') renderDash();
+    if(id==='produtos')  renderProd();
+    if(id==='estoque')   { populateProdSel(); renderSaldo(); renderMov(); }
+    if(id==='vendas')    { populateVendaSel(); renderVendas(); }
+    if(id==='financeiro'){ renderFinStats(); renderFinTabela(); }
+  }
 
   // ── UTILS ─────────────────────────────────────────────────────────────
   function fmt(v) {
@@ -1303,9 +1287,28 @@
   document.getElementById('e-data').value = today();
   document.getElementById('f-data').value = today();
   document.getElementById('v-data').value = today();
-  renderDash();
-  populateProdSel();
-  populateVendaSel();
+
+  // Tela de loading — removida quando Firebase responder
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="fb-loading" style="position:fixed;inset:0;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <svg width="48" height="48" viewBox="0 0 42 42" fill="none"><polygon points="21,2 38,11.5 38,30.5 21,40 4,30.5 4,11.5" fill="#0a1428" stroke="url(#gl)" stroke-width="1.5"/><defs><linearGradient id="gl" x1="0" y1="0" x2="42" y2="42" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#00c8ff"/><stop offset="100%" stop-color="#1a6fd4"/></linearGradient></defs><text x="21" y="28" text-anchor="middle" font-size="18" font-weight="800" fill="url(#gl)" font-family="'Barlow Condensed',Arial">W</text></svg>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:var(--blue-light)">CARREGANDO DADOS...</div>
+    </div>`
+  );
+
+  // Inicia sincronização em tempo real — só aqui, após todas as funções estarem definidas
+  onSnapshot(DOC, (snap) => {
+    applyData(snap.data());
+    document.getElementById('fb-loading')?.remove();
+    populateProdSel();
+    populateVendaSel();
+    renderAtiva();
+  }, (err) => {
+    document.getElementById('fb-loading')?.remove();
+    showToast('Erro de conexão com Firebase: ' + err.message, 'error');
+    // Renderiza mesmo sem dados para não travar a tela
+    renderDash();
+  });
 
   // ── BIND EVENTOS (substitui todos os onclick do HTML) ─────────────────
 
