@@ -567,7 +567,7 @@
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>Modelo</th><th>Tam</th><th>Entradas</th><th>Saídas</th><th>Saldo</th><th>Status</th>
+              <th>Modelo</th><th>Tam</th><th>Entradas</th><th>Saídas</th><th>Saldo</th><th>Status</th><th>Ação</th>
             </tr></thead>
             <tbody id="saldo-tbody"></tbody>
           </table>
@@ -621,6 +621,15 @@
             <label>Custo Unitário (R$)</label>
             <input type="number" id="v-custo" placeholder="0,00" min="0" step="0.01">
           </div>
+          <div class="form-group">
+            <label>Forma de Pagamento</label>
+            <select id="v-pgto">
+              <option value="Dinheiro">💵 Dinheiro</option>
+              <option value="Pix">⚡ Pix</option>
+              <option value="Cartão Débito">💳 Cartão Débito</option>
+              <option value="Cartão Crédito">💳 Cartão Crédito</option>
+            </select>
+          </div>
           <div class="form-group span2">
             <label>Observação</label>
             <input type="text" id="v-obs" placeholder="Ex: Venda WhatsApp, Feira, Loja...">
@@ -633,13 +642,16 @@
       </div>
 
       <div class="card">
-        <div class="card-title">📋 Histórico de Vendas</div>
+        <div class="card-title" style="justify-content:space-between">
+          <span>📋 Histórico de Vendas</span>
+          <button class="btn btn-sm" id="btn-pdf-vendas" style="background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);font-size:11px">📄 Exportar PDF</button>
+        </div>
         <div class="stats-grid" id="venda-stats"></div>
         <div class="table-wrap">
           <table>
             <thead><tr>
               <th>Data</th><th>Produto</th><th>Tam</th><th>Qtd</th>
-              <th>Preço Unit</th><th>Custo Unit</th><th>Total</th><th>Lucro</th><th>Observação</th><th>Ação</th>
+              <th>Preço Unit</th><th>Custo Unit</th><th>Total</th><th>Lucro</th><th>Pagamento</th><th>Observação</th><th>Ação</th>
             </tr></thead>
             <tbody id="venda-tbody"></tbody>
           </table>
@@ -699,7 +711,10 @@
       </div>
 
       <div class="card">
-        <div class="card-title">📋 Histórico Financeiro</div>
+        <div class="card-title" style="justify-content:space-between">
+          <span>📋 Histórico Financeiro</span>
+          <button class="btn btn-sm" id="btn-pdf-financeiro" style="background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);font-size:11px">📄 Exportar PDF</button>
+        </div>
         <div class="tab-row" id="fin-tab-row">
           <button class="tab-btn active" data-fin="TODOS">Todos</button>
           <button class="tab-btn" data-fin="ENTRADA">Entradas</button>
@@ -1013,6 +1028,7 @@
     const preco = parseFloat(document.getElementById('v-preco').value)||0;
     const custo = parseFloat(document.getElementById('v-custo').value)||0;
     const obs   = document.getElementById('v-obs').value.trim();
+    const pgto  = document.getElementById('v-pgto').value;
     if(!pid2) { showToast('Selecione um produto!','error'); return; }
     if(qty < 1) { showToast('Informe a quantidade!','error'); return; }
     if(!preco)  { showToast('Informe o preço de venda!','error'); return; }
@@ -1022,33 +1038,42 @@
     const total = qty * preco;
     const lucro = qty * (preco - custo);
     // Registra venda
-    vendas.push({ id: vid++, data, pid: pid2, qty, preco, custo, total, lucro, obs });
+    vendas.push({ id: vid++, data, pid: pid2, qty, preco, custo, total, lucro, obs, pgto });
     // Gera movimentação de saída no estoque automaticamente
     movimentacoes.push({ id: mid++, data, pid: pid2, tipo: 'SAÍDA', qty, obs: obs || 'Venda registrada' });
+    // Gera lançamento financeiro automaticamente
+    const nomeProd = p ? `${p.modelo} — ${p.tamanho}` : `Produto #${pid2}`;
+    financeiro.push({ id: fid++, data, tipo: 'ENTRADA', cat: 'Venda', desc: `${nomeProd} (${pgto})`, qty, val: preco, total });
     save();
     populateVendaSel();
     renderVendas();
     renderSaldo();
     renderMov();
+    renderFinStats();
+    renderFinTabela();
     document.getElementById('v-qty').value = '1';
     document.getElementById('v-obs').value = '';
     document.getElementById('v-prod').value = '';
     document.getElementById('v-preco').value = '';
     document.getElementById('v-custo').value = '';
     document.getElementById('v-saldo-info').style.display = 'none';
-    showToast(`Venda de ${qty} un. — ${fmt(total)} registrada!`);
+    showToast(`Venda de ${qty} un. — ${fmt(total)} registrada! (${pgto})`);
   }
 
   function delVenda(id) {
-    if(!confirm('Remover esta venda? A saída do estoque gerada por ela também será removida.')) return;
+    if(!confirm('Remover esta venda? A saída do estoque e o lançamento financeiro gerados por ela também serão removidos.')) return;
     const v = vendas.find(x=>x.id===id);
     if(!v) return;
-    // Remove a movimentação correspondente (mesma data, pid, qty e tipo SAÍDA vinculada)
-    // Identifica pelo índice mais próximo para evitar remoções incorretas
+    // Remove a movimentação correspondente
     const movIdx = movimentacoes.findIndex(m=>m.pid===v.pid&&m.tipo==='SAÍDA'&&m.qty===v.qty&&m.data===v.data);
     if(movIdx>-1) movimentacoes.splice(movIdx,1);
+    // Remove lançamento financeiro gerado automaticamente (identifica pela desc e data)
+    const p = produtos.find(x=>x.id===v.pid);
+    const nomeProd = p ? `${p.modelo} — ${p.tamanho}` : `Produto #${v.pid}`;
+    const finIdx = financeiro.findIndex(f=>f.cat==='Venda'&&f.data===v.data&&f.total===v.total&&f.desc.startsWith(nomeProd));
+    if(finIdx>-1) financeiro.splice(finIdx,1);
     vendas = vendas.filter(x=>x.id!==id);
-    save(); populateVendaSel(); renderVendas(); renderSaldo(); renderMov();
+    save(); populateVendaSel(); renderVendas(); renderSaldo(); renderMov(); renderFinStats(); renderFinTabela();
     showToast('Venda removida.');
   }
 
@@ -1057,6 +1082,9 @@
     const totalVendido = vendas.reduce((a,b)=>a+b.total,0);
     const totalLucro   = vendas.reduce((a,b)=>a+b.lucro,0);
     const totalQty     = vendas.reduce((a,b)=>a+b.qty,0);
+    // Stats por forma de pagamento
+    const pgtoMap = {};
+    vendas.forEach(v=>{ const k=v.pgto||'—'; pgtoMap[k]=(pgtoMap[k]||0)+v.total; });
     document.getElementById('venda-stats').innerHTML = `
       <div class="stat-card green"><div class="stat-label">Faturamento</div><div class="stat-val green">${fmt(totalVendido)}</div></div>
       <div class="stat-card ${totalLucro>=0?'blue':'red'}"><div class="stat-label">Lucro Bruto</div><div class="stat-val ${totalLucro>=0?'blue':'red'}">${fmt(totalLucro)}</div></div>
@@ -1066,13 +1094,14 @@
     const tbody = document.getElementById('venda-tbody');
     const sorted = [...vendas].sort((a,b)=>b.id-a.id);
     if(!sorted.length) {
-      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🛒</div><p>Nenhuma venda registrada ainda.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🛒</div><p>Nenhuma venda registrada ainda.</p></div></td></tr>`;
       return;
     }
     tbody.innerHTML = sorted.map(v=>{
       const p = produtos.find(x=>x.id===v.pid);
       const nome = p ? p.modelo : `#${v.pid} (removido)`;
       const tam  = p ? p.tamanho : '—';
+      const pgtoIcon = v.pgto==='Pix'?'⚡':v.pgto&&v.pgto.startsWith('Cartão')?'💳':'💵';
       return `<tr>
         <td style="color:var(--text3)">${fmtDate(v.data)}</td>
         <td style="font-weight:600">${nome}</td>
@@ -1082,6 +1111,7 @@
         <td style="color:var(--text3)">${fmt(v.custo)}</td>
         <td style="font-weight:700;color:var(--green)">${fmt(v.total)}</td>
         <td style="font-weight:700;color:${v.lucro>=0?'var(--cyan)':'var(--red)'}">${fmt(v.lucro)}</td>
+        <td style="color:var(--text2);font-size:12px">${pgtoIcon} ${v.pgto||'—'}</td>
         <td style="color:var(--text3)">${v.obs||'—'}</td>
         <td><button class="btn btn-danger btn-sm" data-action="delVenda" data-id="${v.id}">✕</button></td>
       </tr>`;
@@ -1115,7 +1145,7 @@
   function renderSaldo() {
     const tbody = document.getElementById('saldo-tbody');
     if(!produtos.length) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📦</div><p>Cadastre produtos primeiro.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><p>Cadastre produtos primeiro.</p></div></td></tr>`;
       return;
     }
     tbody.innerHTML = produtos.map(p=>{
@@ -1133,6 +1163,7 @@
         <td style="color:var(--red);font-weight:600">${sai}</td>
         <td style="font-weight:800;font-size:15px;color:${sal<3?'var(--red)':'var(--text)'}">${sal}</td>
         <td><span class="badge ${cls}">${label}</span></td>
+        <td><button class="btn btn-danger btn-sm" data-action="delProdutoEstoque" data-id="${p.id}" title="Remover produto do estoque">✕</button></td>
       </tr>`;
     }).join('');
   }
@@ -1228,6 +1259,8 @@
   // DASHBOARD
   // ═══════════════════════════════════════════════════════════════════════
   function renderDash() {
+    // Faturamento = financeiro ENTRADA + vendas não duplicadas
+    // Para evitar dupla contagem, usa financeiro como fonte única (vendas geram lançamento automático)
     const ent  = financeiro.filter(f=>f.tipo==='ENTRADA').reduce((a,b)=>a+b.total,0);
     const sai  = financeiro.filter(f=>f.tipo==='SAÍDA').reduce((a,b)=>a+b.total,0);
     const luc  = ent - sai;
@@ -1283,6 +1316,139 @@
     </div>`).join('');
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // PDF REPORT GENERATION
+  // ═══════════════════════════════════════════════════════════════════════
+  function gerarPDFVendas() {
+    const totalVendido = vendas.reduce((a,b)=>a+b.total,0);
+    const totalLucro   = vendas.reduce((a,b)=>a+b.lucro,0);
+    const totalQty     = vendas.reduce((a,b)=>a+b.qty,0);
+    const sorted = [...vendas].sort((a,b)=>b.id-a.id);
+
+    // Agrupa por forma de pagamento
+    const porPagamento = {};
+    vendas.forEach(v=>{ const pg = v.pgto||'Não informado'; porPagamento[pg] = (porPagamento[pg]||0) + v.total; });
+
+    const linhas = sorted.map(v=>{
+      const p = produtos.find(x=>x.id===v.pid);
+      const nome = p ? `${p.modelo} — ${p.tamanho}` : `#${v.pid}`;
+      return `<tr>
+        <td>${fmtDate(v.data)}</td>
+        <td>${nome}</td>
+        <td style="text-align:center">${v.qty}</td>
+        <td style="text-align:right">R$ ${parseFloat(v.preco).toFixed(2).replace('.',',')}</td>
+        <td style="text-align:right">R$ ${parseFloat(v.total).toFixed(2).replace('.',',')}</td>
+        <td style="text-align:right;color:${v.lucro>=0?'#16a34a':'#dc2626'}">R$ ${parseFloat(v.lucro).toFixed(2).replace('.',',')}</td>
+        <td>${v.pgto||'—'}</td>
+        <td>${v.obs||'—'}</td>
+      </tr>`;
+    }).join('');
+
+    const pgRows = Object.entries(porPagamento).map(([pg,val])=>
+      `<tr><td>${pg}</td><td style="text-align:right;font-weight:700">R$ ${parseFloat(val).toFixed(2).replace('.',',')}</td></tr>`
+    ).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Relatório de Vendas — Wise Store</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
+      h1 { font-size: 22px; margin-bottom: 4px; color: #0d3f7a; }
+      .sub { color: #666; font-size: 11px; margin-bottom: 20px; }
+      .resumo { display: flex; gap: 16px; margin-bottom: 20px; }
+      .card-r { border: 1px solid #ddd; border-radius: 8px; padding: 12px 18px; flex:1; }
+      .card-r .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+      .card-r .val { font-size: 20px; font-weight: 800; }
+      .green { color: #16a34a; } .blue { color: #1a6fd4; } .amber { color: #d97706; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+      th { background: #f0f4fa; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; text-align: left; border-bottom: 2px solid #c7d7f0; }
+      td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+      tr:last-child td { border-bottom: none; }
+      h3 { color: #0d3f7a; margin: 20px 0 10px; font-size: 14px; }
+      .footer { color: #aaa; font-size: 10px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; }
+    </style></head><body>
+    <h1>📊 Relatório de Vendas</h1>
+    <div class="sub">Wise Store — Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+    <div class="resumo">
+      <div class="card-r"><div class="lbl">Faturamento</div><div class="val green">R$ ${parseFloat(totalVendido).toFixed(2).replace('.',',')}</div></div>
+      <div class="card-r"><div class="lbl">Lucro Bruto</div><div class="val blue">R$ ${parseFloat(totalLucro).toFixed(2).replace('.',',')}</div></div>
+      <div class="card-r"><div class="lbl">Peças Vendidas</div><div class="val amber">${totalQty}</div></div>
+      <div class="card-r"><div class="lbl">Nº de Vendas</div><div class="val">${vendas.length}</div></div>
+    </div>
+    <h3>💳 Vendas por Forma de Pagamento</h3>
+    <table><thead><tr><th>Forma de Pagamento</th><th style="text-align:right">Total</th></tr></thead><tbody>${pgRows}</tbody></table>
+    <h3>🧾 Histórico Detalhado</h3>
+    <table><thead><tr>
+      <th>Data</th><th>Produto</th><th style="text-align:center">Qtd</th>
+      <th style="text-align:right">Preço Unit</th><th style="text-align:right">Total</th>
+      <th style="text-align:right">Lucro</th><th>Pagamento</th><th>Observação</th>
+    </tr></thead><tbody>${linhas || '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:20px">Nenhuma venda registrada.</td></tr>'}</tbody></table>
+    <div class="footer">Wise Store — WISE CONTROL SYSTEM · Documento gerado automaticamente</div>
+    </body></html>`;
+
+    const w = window.open('','_blank');
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(()=>{ w.print(); }, 500);
+  }
+
+  function gerarPDFFinanceiro() {
+    const ent = financeiro.filter(f=>f.tipo==='ENTRADA').reduce((a,b)=>a+b.total,0);
+    const sai = financeiro.filter(f=>f.tipo==='SAÍDA').reduce((a,b)=>a+b.total,0);
+    const luc = ent - sai;
+    const sorted = [...financeiro].sort((a,b)=>b.id-a.id);
+
+    const linhas = sorted.map(f=>`<tr>
+      <td>${fmtDate(f.data)}</td>
+      <td style="color:${f.tipo==='ENTRADA'?'#16a34a':'#dc2626'};font-weight:700">${f.tipo}</td>
+      <td>${f.cat}</td>
+      <td>${f.desc||'—'}</td>
+      <td style="text-align:center">${f.qty}</td>
+      <td style="text-align:right">R$ ${parseFloat(f.val).toFixed(2).replace('.',',')}</td>
+      <td style="text-align:right;font-weight:700;color:${f.tipo==='ENTRADA'?'#16a34a':'#dc2626'}">R$ ${parseFloat(f.total).toFixed(2).replace('.',',')}</td>
+    </tr>`).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Relatório Financeiro — Wise Store</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 24px; }
+      h1 { font-size: 22px; margin-bottom: 4px; color: #0d3f7a; }
+      .sub { color: #666; font-size: 11px; margin-bottom: 20px; }
+      .resumo { display: flex; gap: 16px; margin-bottom: 20px; }
+      .card-r { border: 1px solid #ddd; border-radius: 8px; padding: 12px 18px; flex:1; }
+      .card-r .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+      .card-r .val { font-size: 20px; font-weight: 800; }
+      .green { color: #16a34a; } .blue { color: #1a6fd4; } .red { color: #dc2626; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+      th { background: #f0f4fa; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; text-align: left; border-bottom: 2px solid #c7d7f0; }
+      td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+      tr:last-child td { border-bottom: none; }
+      h3 { color: #0d3f7a; margin: 20px 0 10px; font-size: 14px; }
+      .footer { color: #aaa; font-size: 10px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; }
+    </style></head><body>
+    <h1>💰 Relatório Financeiro</h1>
+    <div class="sub">Wise Store — Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+    <div class="resumo">
+      <div class="card-r"><div class="lbl">Faturamento</div><div class="val green">R$ ${parseFloat(ent).toFixed(2).replace('.',',')}</div></div>
+      <div class="card-r"><div class="lbl">Despesas</div><div class="val red">R$ ${parseFloat(sai).toFixed(2).replace('.',',')}</div></div>
+      <div class="card-r"><div class="lbl">Resultado</div><div class="val ${luc>=0?'blue':'red'}">R$ ${parseFloat(luc).toFixed(2).replace('.',',')}</div></div>
+      <div class="card-r"><div class="lbl">Lançamentos</div><div class="val">${financeiro.length}</div></div>
+    </div>
+    <h3>📋 Histórico de Lançamentos</h3>
+    <table><thead><tr>
+      <th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th>
+      <th style="text-align:center">Qtd</th><th style="text-align:right">Vlr Unit</th><th style="text-align:right">Total</th>
+    </tr></thead><tbody>${linhas || '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">Nenhum lançamento registrado.</td></tr>'}</tbody></table>
+    <div class="footer">Wise Store — WISE CONTROL SYSTEM · Documento gerado automaticamente</div>
+    </body></html>`;
+
+    const w = window.open('','_blank');
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(()=>{ w.print(); }, 500);
+  }
+
   // ── INIT ──────────────────────────────────────────────────────────────
   document.getElementById('e-data').value = today();
   document.getElementById('f-data').value = today();
@@ -1334,6 +1500,10 @@
     btn.addEventListener('click', () => filterFin(btn.dataset.fin, btn));
   });
 
+  // PDF exports
+  document.getElementById('btn-pdf-vendas').addEventListener('click', gerarPDFVendas);
+  document.getElementById('btn-pdf-financeiro').addEventListener('click', gerarPDFFinanceiro);
+
   // Modal preços
   document.getElementById('btn-modal-cancelar').addEventListener('click', closeModalPreco);
   document.getElementById('btn-modal-salvar').addEventListener('click', salvarPrecos);
@@ -1347,6 +1517,7 @@
     if(!action) return;
     const id = parseInt(t.dataset.id);
     if(action === 'delProduto')   delProduto(id);
+    if(action === 'delProdutoEstoque') delProduto(id);
     if(action === 'delMov')       delMov(id);
     if(action === 'delVenda')     delVenda(id);
     if(action === 'delFin')       delFin(id);
