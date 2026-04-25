@@ -745,30 +745,89 @@
   </div>
 </div>
 
-<script>
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  // ══════════════════════════════════════════════════════════════
+  // 🔧 COLE AQUI AS SUAS CREDENCIAIS DO FIREBASE
+  // ══════════════════════════════════════════════════════════════
+  const firebaseConfig = {
+    apiKey:            "AIzaSyARIm2bnZVJgT8-KoJ7Y1qn0I0OE7gJFw4",
+    authDomain:        "wise-control-97e87.firebaseapp.com",
+    projectId:         "wise-control-97e87",
+    storageBucket:     "wise-control-97e87.firebasestorage.app",
+    messagingSenderId: "484783092605",
+    appId:             "1:484783092605:web:2d589f7d0712ca09259214"
+  };
+  // ══════════════════════════════════════════════════════════════
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const DOC = doc(db, 'wise_store', 'dados');
+
   // ── DATA ──────────────────────────────────────────────────────────────
-  let produtos      = JSON.parse(localStorage.getItem('wc_produtos') || '[]');
-  let movimentacoes = JSON.parse(localStorage.getItem('wc_mov')      || '[]');
-  let financeiro    = JSON.parse(localStorage.getItem('wc_fin')      || '[]');
-  let vendas        = JSON.parse(localStorage.getItem('wc_vendas')   || '[]');
-  let pid  = parseInt(localStorage.getItem('wc_pid')  || '1');
-  let mid  = parseInt(localStorage.getItem('wc_mid')  || '1');
-  let fid  = parseInt(localStorage.getItem('wc_fid')  || '1');
-  let vid  = parseInt(localStorage.getItem('wc_vid')  || '1');
+  let produtos      = [];
+  let movimentacoes = [];
+  let financeiro    = [];
+  let vendas        = [];
+  let pid  = 1, mid = 1, fid = 1, vid = 1;
   let finFiltro = 'TODOS';
   let prodFiltro = 'TODOS';
   let modalPrecoId = null;
+  let _saving = false;
 
-  function save() {
-    localStorage.setItem('wc_produtos', JSON.stringify(produtos));
-    localStorage.setItem('wc_mov',      JSON.stringify(movimentacoes));
-    localStorage.setItem('wc_fin',      JSON.stringify(financeiro));
-    localStorage.setItem('wc_vendas',   JSON.stringify(vendas));
-    localStorage.setItem('wc_pid',  pid);
-    localStorage.setItem('wc_mid',  mid);
-    localStorage.setItem('wc_fid',  fid);
-    localStorage.setItem('wc_vid',  vid);
+  // ── SAVE → Firestore ──────────────────────────────────────────
+  async function save() {
+    if(_saving) return;
+    _saving = true;
+    try {
+      await setDoc(DOC, { produtos, movimentacoes, financeiro, vendas, pid, mid, fid, vid });
+    } catch(e) {
+      showToast('Erro ao salvar: ' + e.message, 'error');
+    }
+    _saving = false;
   }
+
+  // ── LOAD + REALTIME SYNC ──────────────────────────────────────
+  function applyData(data) {
+    if(!data) return;
+    produtos      = data.produtos      || [];
+    movimentacoes = data.movimentacoes || [];
+    financeiro    = data.financeiro    || [];
+    vendas        = data.vendas        || [];
+    pid = data.pid || 1; mid = data.mid || 1;
+    fid = data.fid || 1; vid = data.vid || 1;
+  }
+
+  // Mostra loading enquanto carrega
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="fb-loading" style="position:fixed;inset:0;z-index:9000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <svg width="48" height="48" viewBox="0 0 42 42" fill="none"><polygon points="21,2 38,11.5 38,30.5 21,40 4,30.5 4,11.5" fill="#0a1428" stroke="url(#gl)" stroke-width="1.5"/><defs><linearGradient id="gl" x1="0" y1="0" x2="42" y2="42" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#00c8ff"/><stop offset="100%" stop-color="#1a6fd4"/></linearGradient></defs><text x="21" y="28" text-anchor="middle" font-size="18" font-weight="800" fill="url(#gl)" font-family="'Barlow Condensed',Arial">W</text></svg>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:var(--blue-light)">CARREGANDO DADOS...</div>
+    </div>`
+  );
+
+  // Escuta mudanças em tempo real (sincroniza entre aparelhos)
+  onSnapshot(DOC, (snap) => {
+    applyData(snap.data());
+    document.getElementById('fb-loading')?.remove();
+    // Re-renderiza a tela ativa
+    const active = document.querySelector('.section.active');
+    if(active) {
+      const id = active.id.replace('sec-','');
+      if(id==='dashboard') renderDash();
+      if(id==='produtos')  { renderProd(); }
+      if(id==='estoque')   { populateProdSel(); renderSaldo(); renderMov(); }
+      if(id==='vendas')    { populateVendaSel(); renderVendas(); }
+      if(id==='financeiro'){ renderFinStats(); renderFinTabela(); }
+    }
+  }, (err) => {
+    document.getElementById('fb-loading')?.remove();
+    showToast('Erro de conexão com o banco: ' + err.message, 'error');
+  });
 
   // ── UTILS ─────────────────────────────────────────────────────────────
   function fmt(v) {
