@@ -425,6 +425,9 @@
     <button class="nav-btn" data-sec="estoque" onclick="showSection('estoque',this)">
       <span class="nav-icon">📦</span>Estoque
     </button>
+    <button class="nav-btn" data-sec="vendas" onclick="showSection('vendas',this)">
+      <span class="nav-icon">🛒</span>Vendas
+    </button>
     <button class="nav-btn" data-sec="financeiro" onclick="showSection('financeiro',this)">
       <span class="nav-icon">💰</span>Financeiro
     </button>
@@ -472,14 +475,19 @@
         <div class="form-grid">
           <div class="form-group span2">
             <label>Modelo</label>
-            <select id="p-modelo">
-              <option>Masculina Amarela Jogador</option>
-              <option>Masculina Amarela Torcedor</option>
-              <option>Masculina Azul Jogador</option>
-              <option>Masculina Azul Torcedor</option>
-              <option>Feminina Amarela Torcedor</option>
-              <option>Feminina Azul Torcedor</option>
+            <select id="p-modelo" onchange="onModeloChange(this)">
+              <option value="Masculina Amarela Jogador">Masculina Amarela Jogador</option>
+              <option value="Masculina Amarela Torcedor">Masculina Amarela Torcedor</option>
+              <option value="Masculina Azul Jogador">Masculina Azul Jogador</option>
+              <option value="Masculina Azul Torcedor">Masculina Azul Torcedor</option>
+              <option value="Feminina Amarela Torcedor">Feminina Amarela Torcedor</option>
+              <option value="Feminina Azul Torcedor">Feminina Azul Torcedor</option>
+              <option value="__outro__">✏️ Outro (digitar nome)...</option>
             </select>
+          </div>
+          <div class="form-group span2" id="p-modelo-custom-wrap" style="display:none">
+            <label>Nome do Produto (personalizado)</label>
+            <input type="text" id="p-modelo-custom" placeholder="Ex: Regata Verde Torcedor, Camisa Infantil...">
           </div>
           <div class="form-group">
             <label>Tamanho</label>
@@ -579,6 +587,66 @@
       </div>
     </section>
 
+    <!-- ═══════════════ VENDAS ═══════════════ -->
+    <section id="sec-vendas" class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Registro de Vendas</div>
+          <div class="section-sub">Registre as vendas de produtos cadastrados no estoque</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🛒 Nova Venda</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Data da Venda</label>
+            <input type="date" id="v-data">
+          </div>
+          <div class="form-group span2">
+            <label>Produto</label>
+            <select id="v-prod" onchange="onVendaProdChange(this)">
+              <option value="">Selecione um produto...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Quantidade</label>
+            <input type="number" id="v-qty" placeholder="0" min="1" value="1">
+          </div>
+          <div class="form-group">
+            <label>Preço Unitário (R$)</label>
+            <input type="number" id="v-preco" placeholder="0,00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Custo Unitário (R$)</label>
+            <input type="number" id="v-custo" placeholder="0,00" min="0" step="0.01">
+          </div>
+          <div class="form-group span2">
+            <label>Observação</label>
+            <input type="text" id="v-obs" placeholder="Ex: Venda WhatsApp, Feira, Loja...">
+          </div>
+        </div>
+        <div id="v-saldo-info" style="margin-bottom:14px;font-size:13px;color:var(--text3);display:none">
+          📦 Saldo disponível: <strong id="v-saldo-val" style="color:var(--text)">—</strong> un.
+        </div>
+        <button class="btn btn-primary" onclick="addVenda()">🛒 Registrar Venda</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Histórico de Vendas</div>
+        <div class="stats-grid" id="venda-stats"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Data</th><th>Produto</th><th>Tam</th><th>Qtd</th>
+              <th>Preço Unit</th><th>Custo Unit</th><th>Total</th><th>Lucro</th><th>Observação</th><th>Ação</th>
+            </tr></thead>
+            <tbody id="venda-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- ═══════════════ FINANCEIRO ═══════════════ -->
     <section id="sec-financeiro" class="section">
       <div class="section-header">
@@ -655,24 +723,51 @@
 <!-- TOAST -->
 <div id="toast"></div>
 
+<!-- MODAL EDITAR PREÇOS -->
+<div id="modal-preco" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-xl);padding:28px;width:min(420px,92vw);box-shadow:0 24px 64px rgba(0,0,0,0.5);">
+    <div style="font-family:'Barlow Condensed';font-size:20px;font-weight:800;letter-spacing:1px;margin-bottom:6px">✏️ Atualizar Preços</div>
+    <div id="modal-preco-nome" style="font-size:13px;color:var(--text3);margin-bottom:22px"></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Novo Custo (R$)</label>
+        <input type="number" id="modal-custo" placeholder="0,00" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Novo Preço de Venda (R$)</label>
+        <input type="number" id="modal-preco-val" placeholder="0,00" min="0" step="0.01">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" style="background:var(--surface3);color:var(--text2);border:1px solid var(--border)" onclick="closeModalPreco()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPrecos()">💾 Salvar Preços</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ── DATA ──────────────────────────────────────────────────────────────
   let produtos      = JSON.parse(localStorage.getItem('wc_produtos') || '[]');
   let movimentacoes = JSON.parse(localStorage.getItem('wc_mov')      || '[]');
   let financeiro    = JSON.parse(localStorage.getItem('wc_fin')      || '[]');
+  let vendas        = JSON.parse(localStorage.getItem('wc_vendas')   || '[]');
   let pid  = parseInt(localStorage.getItem('wc_pid')  || '1');
   let mid  = parseInt(localStorage.getItem('wc_mid')  || '1');
   let fid  = parseInt(localStorage.getItem('wc_fid')  || '1');
+  let vid  = parseInt(localStorage.getItem('wc_vid')  || '1');
   let finFiltro = 'TODOS';
   let prodFiltro = 'TODOS';
+  let modalPrecoId = null;
 
   function save() {
     localStorage.setItem('wc_produtos', JSON.stringify(produtos));
     localStorage.setItem('wc_mov',      JSON.stringify(movimentacoes));
     localStorage.setItem('wc_fin',      JSON.stringify(financeiro));
+    localStorage.setItem('wc_vendas',   JSON.stringify(vendas));
     localStorage.setItem('wc_pid',  pid);
     localStorage.setItem('wc_mid',  mid);
     localStorage.setItem('wc_fid',  fid);
+    localStorage.setItem('wc_vid',  vid);
   }
 
   // ── UTILS ─────────────────────────────────────────────────────────────
@@ -711,6 +806,7 @@
     if(id==='dashboard') renderDash();
     if(id==='produtos')  renderProd();
     if(id==='estoque')   { populateProdSel(); renderSaldo(); renderMov(); }
+    if(id==='vendas')    { populateVendaSel(); renderVendas(); }
     if(id==='financeiro'){ renderFinStats(); renderFinTabela(); }
   }
 
@@ -726,34 +822,76 @@
   // ═══════════════════════════════════════════════════════════════════════
   // PRODUTOS
   // ═══════════════════════════════════════════════════════════════════════
+  function onModeloChange(sel) {
+    const wrap = document.getElementById('p-modelo-custom-wrap');
+    wrap.style.display = sel.value === '__outro__' ? 'block' : 'none';
+    if(sel.value !== '__outro__') document.getElementById('p-modelo-custom').value = '';
+  }
+
   function addProduto() {
-    const modelo = document.getElementById('p-modelo').value;
+    const sel    = document.getElementById('p-modelo');
+    const modelo = sel.value === '__outro__'
+      ? document.getElementById('p-modelo-custom').value.trim()
+      : sel.value;
     const tam    = document.getElementById('p-tam').value;
     const custo  = parseFloat(document.getElementById('p-custo').value)||0;
     const preco  = parseFloat(document.getElementById('p-preco').value)||0;
+    if(!modelo) { showToast('Informe o nome do produto!','error'); return; }
     if(!custo || !preco) { showToast('Informe custo e preço!','error'); return; }
     if(produtos.find(p=>p.modelo===modelo&&p.tamanho===tam)) {
       showToast('Produto já cadastrado!','error'); return;
     }
     produtos.push({ id: pid++, modelo, tamanho: tam, custo, preco });
-    save(); renderProd(); populateProdSel();
+    save(); renderProd(); populateProdSel(); populateVendaSel();
     document.getElementById('p-custo').value = '';
     document.getElementById('p-preco').value = '';
+    document.getElementById('p-modelo-custom').value = '';
+    document.getElementById('p-modelo-custom-wrap').style.display = 'none';
+    sel.value = 'Masculina Amarela Jogador';
     showToast(`${modelo} — ${tam} cadastrado!`);
   }
 
   function delProduto(id) {
     if(!confirm('Remover este produto? As movimentações associadas serão mantidas.')) return;
     produtos = produtos.filter(p=>p.id!==id);
-    save(); renderProd(); populateProdSel();
+    save(); renderProd(); populateProdSel(); populateVendaSel();
     showToast('Produto removido.');
   }
 
+  function openModalPreco(id) {
+    const p = produtos.find(x=>x.id===id);
+    if(!p) return;
+    modalPrecoId = id;
+    document.getElementById('modal-preco-nome').textContent = `${p.modelo} — ${p.tamanho}`;
+    document.getElementById('modal-custo').value = p.custo;
+    document.getElementById('modal-preco-val').value = p.preco;
+    document.getElementById('modal-preco').style.display = 'flex';
+  }
+
+  function closeModalPreco() {
+    document.getElementById('modal-preco').style.display = 'none';
+    modalPrecoId = null;
+  }
+
+  function salvarPrecos() {
+    const p = produtos.find(x=>x.id===modalPrecoId);
+    if(!p) return;
+    const custo = parseFloat(document.getElementById('modal-custo').value)||0;
+    const preco = parseFloat(document.getElementById('modal-preco-val').value)||0;
+    if(!custo || !preco) { showToast('Informe custo e preço!','error'); return; }
+    p.custo = custo; p.preco = preco;
+    save(); renderProd();
+    closeModalPreco();
+    showToast('Preços atualizados!');
+  }
+
+  // Close modal clicking outside
+  document.getElementById('modal-preco').addEventListener('click', function(e){ if(e.target===this) closeModalPreco(); });
+
   function renderProd() {
-    // filter tabs
     const modelos = ['TODOS', ...new Set(produtos.map(p=>p.modelo))];
     document.getElementById('pf-row').innerHTML = modelos.map(m=>
-      `<button class="tab-btn${m===prodFiltro?' active':''}" onclick="setProdFiltro('${m}',this)">${m==='TODOS'?'Todos':m}</button>`
+      `<button class="tab-btn${m===prodFiltro?' active':''}" onclick="setProdFiltro('${m.replace(/'/g,"\\'")}',this)">${m==='TODOS'?'Todos':m}</button>`
     ).join('');
 
     const list = prodFiltro==='TODOS' ? produtos : produtos.filter(p=>p.modelo===prodFiltro);
@@ -773,7 +911,10 @@
         <td style="color:var(--text2)">${fmt(p.custo)}</td>
         <td style="color:var(--green);font-weight:700">${fmt(p.preco)}</td>
         <td style="color:var(--amber)">${margem}%</td>
-        <td><button class="btn btn-danger btn-sm" onclick="delProduto(${p.id})">✕</button></td>
+        <td style="display:flex;gap:6px">
+          <button class="btn btn-sm" style="background:rgba(58,142,246,0.15);color:var(--blue-light);border:1px solid rgba(58,142,246,0.25)" onclick="openModalPreco(${p.id})" title="Atualizar preços">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="delProduto(${p.id})">✕</button>
+        </td>
       </tr>`;
     }).join('');
   }
@@ -794,6 +935,117 @@
     sel.innerHTML = produtos.length
       ? produtos.map(p=>`<option value="${p.id}">${p.modelo} — ${p.tamanho}</option>`).join('')
       : '<option value="">Nenhum produto cadastrado</option>';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // VENDAS
+  // ═══════════════════════════════════════════════════════════════════════
+  function populateVendaSel() {
+    const sel = document.getElementById('v-prod');
+    if(!sel) return;
+    const disponíveis = produtos.filter(p=>getSaldo(p.id)>0);
+    sel.innerHTML = '<option value="">Selecione um produto...</option>' + (
+      disponíveis.length
+        ? disponíveis.map(p=>`<option value="${p.id}">${p.modelo} — ${p.tamanho} (Saldo: ${getSaldo(p.id)} un.)</option>`).join('')
+        : '<option value="" disabled>Nenhum produto com estoque disponível</option>'
+    );
+    document.getElementById('v-saldo-info').style.display = 'none';
+  }
+
+  function onVendaProdChange(sel) {
+    const pid2 = parseInt(sel.value);
+    const saldoBox = document.getElementById('v-saldo-info');
+    if(!pid2) { saldoBox.style.display='none'; return; }
+    const p = produtos.find(x=>x.id===pid2);
+    const saldo = getSaldo(pid2);
+    document.getElementById('v-saldo-val').textContent = saldo;
+    saldoBox.style.display = 'block';
+    if(p) {
+      document.getElementById('v-preco').value = p.preco;
+      document.getElementById('v-custo').value = p.custo;
+    }
+  }
+
+  function addVenda() {
+    const data  = document.getElementById('v-data').value || today();
+    const pid2  = parseInt(document.getElementById('v-prod').value);
+    const qty   = parseInt(document.getElementById('v-qty').value)||0;
+    const preco = parseFloat(document.getElementById('v-preco').value)||0;
+    const custo = parseFloat(document.getElementById('v-custo').value)||0;
+    const obs   = document.getElementById('v-obs').value.trim();
+    if(!pid2) { showToast('Selecione um produto!','error'); return; }
+    if(qty < 1) { showToast('Informe a quantidade!','error'); return; }
+    if(!preco)  { showToast('Informe o preço de venda!','error'); return; }
+    const saldo = getSaldo(pid2);
+    if(qty > saldo) { showToast(`Estoque insuficiente! Saldo atual: ${saldo} un.`,'error'); return; }
+    const p = produtos.find(x=>x.id===pid2);
+    const total = qty * preco;
+    const lucro = qty * (preco - custo);
+    // Registra venda
+    vendas.push({ id: vid++, data, pid: pid2, qty, preco, custo, total, lucro, obs });
+    // Gera movimentação de saída no estoque automaticamente
+    movimentacoes.push({ id: mid++, data, pid: pid2, tipo: 'SAÍDA', qty, obs: obs || 'Venda registrada' });
+    save();
+    populateVendaSel();
+    renderVendas();
+    renderSaldo();
+    renderMov();
+    document.getElementById('v-qty').value = '1';
+    document.getElementById('v-obs').value = '';
+    document.getElementById('v-prod').value = '';
+    document.getElementById('v-preco').value = '';
+    document.getElementById('v-custo').value = '';
+    document.getElementById('v-saldo-info').style.display = 'none';
+    showToast(`Venda de ${qty} un. — ${fmt(total)} registrada!`);
+  }
+
+  function delVenda(id) {
+    if(!confirm('Remover esta venda? A saída do estoque gerada por ela também será removida.')) return;
+    const v = vendas.find(x=>x.id===id);
+    if(!v) return;
+    // Remove a movimentação correspondente (mesma data, pid, qty e tipo SAÍDA vinculada)
+    // Identifica pelo índice mais próximo para evitar remoções incorretas
+    const movIdx = movimentacoes.findIndex(m=>m.pid===v.pid&&m.tipo==='SAÍDA'&&m.qty===v.qty&&m.data===v.data);
+    if(movIdx>-1) movimentacoes.splice(movIdx,1);
+    vendas = vendas.filter(x=>x.id!==id);
+    save(); populateVendaSel(); renderVendas(); renderSaldo(); renderMov();
+    showToast('Venda removida.');
+  }
+
+  function renderVendas() {
+    // Stats
+    const totalVendido = vendas.reduce((a,b)=>a+b.total,0);
+    const totalLucro   = vendas.reduce((a,b)=>a+b.lucro,0);
+    const totalQty     = vendas.reduce((a,b)=>a+b.qty,0);
+    document.getElementById('venda-stats').innerHTML = `
+      <div class="stat-card green"><div class="stat-label">Faturamento</div><div class="stat-val green">${fmt(totalVendido)}</div></div>
+      <div class="stat-card ${totalLucro>=0?'blue':'red'}"><div class="stat-label">Lucro Bruto</div><div class="stat-val ${totalLucro>=0?'blue':'red'}">${fmt(totalLucro)}</div></div>
+      <div class="stat-card amber"><div class="stat-label">Peças Vendidas</div><div class="stat-val amber">${totalQty}</div></div>
+      <div class="stat-card blue"><div class="stat-label">Nº de Vendas</div><div class="stat-val blue">${vendas.length}</div></div>
+    `;
+    const tbody = document.getElementById('venda-tbody');
+    const sorted = [...vendas].sort((a,b)=>b.id-a.id);
+    if(!sorted.length) {
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🛒</div><p>Nenhuma venda registrada ainda.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = sorted.map(v=>{
+      const p = produtos.find(x=>x.id===v.pid);
+      const nome = p ? p.modelo : `#${v.pid} (removido)`;
+      const tam  = p ? p.tamanho : '—';
+      return `<tr>
+        <td style="color:var(--text3)">${fmtDate(v.data)}</td>
+        <td style="font-weight:600">${nome}</td>
+        <td><strong style="font-family:'Barlow Condensed';font-size:15px">${tam}</strong></td>
+        <td style="font-weight:700">${v.qty}</td>
+        <td>${fmt(v.preco)}</td>
+        <td style="color:var(--text3)">${fmt(v.custo)}</td>
+        <td style="font-weight:700;color:var(--green)">${fmt(v.total)}</td>
+        <td style="font-weight:700;color:${v.lucro>=0?'var(--cyan)':'var(--red)'}">${fmt(v.lucro)}</td>
+        <td style="color:var(--text3)">${v.obs||'—'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="delVenda(${v.id})">✕</button></td>
+      </tr>`;
+    }).join('');
   }
 
   function addEstoque() {
@@ -994,8 +1246,10 @@
   // ── INIT ──────────────────────────────────────────────────────────────
   document.getElementById('e-data').value = today();
   document.getElementById('f-data').value = today();
+  document.getElementById('v-data').value = today();
   renderDash();
   populateProdSel();
+  populateVendaSel();
 </script>
 </body>
 </html>
