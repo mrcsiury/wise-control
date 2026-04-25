@@ -416,19 +416,19 @@
 
   <!-- NAV -->
   <nav class="nav">
-    <button class="nav-btn active" data-sec="dashboard" onclick="showSection('dashboard',this)">
+    <button class="nav-btn active" data-sec="dashboard">
       <span class="nav-icon">📈</span>Dashboard
     </button>
-    <button class="nav-btn" data-sec="produtos" onclick="showSection('produtos',this)">
+    <button class="nav-btn" data-sec="produtos">
       <span class="nav-icon">🏷️</span>Produtos
     </button>
-    <button class="nav-btn" data-sec="estoque" onclick="showSection('estoque',this)">
+    <button class="nav-btn" data-sec="estoque">
       <span class="nav-icon">📦</span>Estoque
     </button>
-    <button class="nav-btn" data-sec="vendas" onclick="showSection('vendas',this)">
+    <button class="nav-btn" data-sec="vendas">
       <span class="nav-icon">🛒</span>Vendas
     </button>
-    <button class="nav-btn" data-sec="financeiro" onclick="showSection('financeiro',this)">
+    <button class="nav-btn" data-sec="financeiro">
       <span class="nav-icon">💰</span>Financeiro
     </button>
   </nav>
@@ -475,7 +475,7 @@
         <div class="form-grid">
           <div class="form-group span2">
             <label>Modelo</label>
-            <select id="p-modelo" onchange="onModeloChange(this)">
+            <select id="p-modelo">
               <option value="Masculina Amarela Jogador">Masculina Amarela Jogador</option>
               <option value="Masculina Amarela Torcedor">Masculina Amarela Torcedor</option>
               <option value="Masculina Azul Jogador">Masculina Azul Jogador</option>
@@ -505,7 +505,7 @@
             <input type="number" id="p-preco" placeholder="0,00" min="0" step="0.01">
           </div>
         </div>
-        <button class="btn btn-primary" onclick="addProduto()">➕ Cadastrar Produto</button>
+        <button class="btn btn-primary" id="btn-add-produto">➕ Cadastrar Produto</button>
       </div>
 
       <div class="card">
@@ -559,7 +559,7 @@
             <input type="text" id="e-obs" placeholder="Ex: Compra fornecedor, Venda WhatsApp...">
           </div>
         </div>
-        <button class="btn btn-primary" onclick="addEstoque()">📦 Registrar Movimentação</button>
+        <button class="btn btn-primary" id="btn-add-estoque">📦 Registrar Movimentação</button>
       </div>
 
       <div class="card">
@@ -605,7 +605,7 @@
           </div>
           <div class="form-group span2">
             <label>Produto</label>
-            <select id="v-prod" onchange="onVendaProdChange(this)">
+            <select id="v-prod">
               <option value="">Selecione um produto...</option>
             </select>
           </div>
@@ -629,7 +629,7 @@
         <div id="v-saldo-info" style="margin-bottom:14px;font-size:13px;color:var(--text3);display:none">
           📦 Saldo disponível: <strong id="v-saldo-val" style="color:var(--text)">—</strong> un.
         </div>
-        <button class="btn btn-primary" onclick="addVenda()">🛒 Registrar Venda</button>
+        <button class="btn btn-primary" id="btn-add-venda">🛒 Registrar Venda</button>
       </div>
 
       <div class="card">
@@ -695,15 +695,15 @@
             <input type="number" id="f-val" placeholder="0,00" min="0" step="0.01">
           </div>
         </div>
-        <button class="btn btn-primary" onclick="addFinanceiro()">💰 Registrar Lançamento</button>
+        <button class="btn btn-primary" id="btn-add-financeiro">💰 Registrar Lançamento</button>
       </div>
 
       <div class="card">
         <div class="card-title">📋 Histórico Financeiro</div>
-        <div class="tab-row">
-          <button class="tab-btn active" onclick="filterFin('TODOS',this)">Todos</button>
-          <button class="tab-btn" onclick="filterFin('ENTRADA',this)">Entradas</button>
-          <button class="tab-btn" onclick="filterFin('SAÍDA',this)">Saídas</button>
+        <div class="tab-row" id="fin-tab-row">
+          <button class="tab-btn active" data-fin="TODOS">Todos</button>
+          <button class="tab-btn" data-fin="ENTRADA">Entradas</button>
+          <button class="tab-btn" data-fin="SAÍDA">Saídas</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -739,8 +739,8 @@
       </div>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-      <button class="btn" style="background:var(--surface3);color:var(--text2);border:1px solid var(--border)" onclick="closeModalPreco()">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarPrecos()">💾 Salvar Preços</button>
+      <button class="btn" id="btn-modal-cancelar" style="background:var(--surface3);color:var(--text2);border:1px solid var(--border)">Cancelar</button>
+      <button class="btn btn-primary" id="btn-modal-salvar">💾 Salvar Preços</button>
     </div>
   </div>
 </div>
@@ -944,13 +944,10 @@
     showToast('Preços atualizados!');
   }
 
-  // Close modal clicking outside
-  document.getElementById('modal-preco').addEventListener('click', function(e){ if(e.target===this) closeModalPreco(); });
-
   function renderProd() {
     const modelos = ['TODOS', ...new Set(produtos.map(p=>p.modelo))];
     document.getElementById('pf-row').innerHTML = modelos.map(m=>
-      `<button class="tab-btn${m===prodFiltro?' active':''}" onclick="setProdFiltro('${m.replace(/'/g,"\\'")}',this)">${m==='TODOS'?'Todos':m}</button>`
+      `<button class="tab-btn${m===prodFiltro?' active':''}" data-action="setProdFiltro" data-filtro="${m}">${m==='TODOS'?'Todos':m}</button>`
     ).join('');
 
     const list = prodFiltro==='TODOS' ? produtos : produtos.filter(p=>p.modelo===prodFiltro);
@@ -971,8 +968,8 @@
         <td style="color:var(--green);font-weight:700">${fmt(p.preco)}</td>
         <td style="color:var(--amber)">${margem}%</td>
         <td style="display:flex;gap:6px">
-          <button class="btn btn-sm" style="background:rgba(58,142,246,0.15);color:var(--blue-light);border:1px solid rgba(58,142,246,0.25)" onclick="openModalPreco(${p.id})" title="Atualizar preços">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="delProduto(${p.id})">✕</button>
+          <button class="btn btn-sm" data-action="openModal" data-id="${p.id}" style="background:rgba(58,142,246,0.15);color:var(--blue-light);border:1px solid rgba(58,142,246,0.25)" title="Atualizar preços">✏️</button>
+          <button class="btn btn-danger btn-sm" data-action="delProduto" data-id="${p.id}">✕</button>
         </td>
       </tr>`;
     }).join('');
@@ -1102,7 +1099,7 @@
         <td style="font-weight:700;color:var(--green)">${fmt(v.total)}</td>
         <td style="font-weight:700;color:${v.lucro>=0?'var(--cyan)':'var(--red)'}">${fmt(v.lucro)}</td>
         <td style="color:var(--text3)">${v.obs||'—'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="delVenda(${v.id})">✕</button></td>
+        <td><button class="btn btn-danger btn-sm" data-action="delVenda" data-id="${v.id}">✕</button></td>
       </tr>`;
     }).join('');
   }
@@ -1172,7 +1169,7 @@
         <td><span class="badge badge-${m.tipo==='ENTRADA'?'entrada':'saida'}">${m.tipo}</span></td>
         <td style="font-weight:700">${m.qty}</td>
         <td style="color:var(--text3)">${m.obs||'—'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="delMov(${m.id})">✕</button></td>
+        <td><button class="btn btn-danger btn-sm" data-action="delMov" data-id="${m.id}">✕</button></td>
       </tr>`;
     }).join('');
   }
@@ -1239,7 +1236,7 @@
       <td>${f.qty}</td>
       <td>${fmt(f.val)}</td>
       <td style="font-weight:700;color:${f.tipo==='ENTRADA'?'var(--green)':'var(--red)'}">${fmt(f.total)}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="delFin(${f.id})">✕</button></td>
+      <td><button class="btn btn-danger btn-sm" data-action="delFin" data-id="${f.id}">✕</button></td>
     </tr>`).join('');
   }
 
@@ -1309,6 +1306,55 @@
   renderDash();
   populateProdSel();
   populateVendaSel();
+
+  // ── BIND EVENTOS (substitui todos os onclick do HTML) ─────────────────
+
+  // Nav
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => showSection(btn.dataset.sec, btn));
+  });
+
+  // Produtos
+  document.getElementById('p-modelo').addEventListener('change', function(){ onModeloChange(this); });
+  document.getElementById('btn-add-produto').addEventListener('click', addProduto);
+
+  // Estoque
+  document.getElementById('btn-add-estoque').addEventListener('click', addEstoque);
+
+  // Vendas
+  document.getElementById('v-prod').addEventListener('change', function(){ onVendaProdChange(this); });
+  document.getElementById('btn-add-venda').addEventListener('click', addVenda);
+
+  // Financeiro
+  document.getElementById('btn-add-financeiro').addEventListener('click', addFinanceiro);
+  document.querySelectorAll('#fin-tab-row .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => filterFin(btn.dataset.fin, btn));
+  });
+
+  // Modal preços
+  document.getElementById('btn-modal-cancelar').addEventListener('click', closeModalPreco);
+  document.getElementById('btn-modal-salvar').addEventListener('click', salvarPrecos);
+  document.getElementById('modal-preco').addEventListener('click', function(e){ if(e.target===this) closeModalPreco(); });
+
+  // Delegação para botões gerados dinamicamente (tabelas)
+  document.addEventListener('click', e => {
+    const t = e.target.closest('button');
+    if(!t) return;
+    const action = t.dataset.action;
+    if(!action) return;
+    const id = parseInt(t.dataset.id);
+    if(action === 'delProduto')   delProduto(id);
+    if(action === 'delMov')       delMov(id);
+    if(action === 'delVenda')     delVenda(id);
+    if(action === 'delFin')       delFin(id);
+    if(action === 'openModal')    openModalPreco(id);
+    if(action === 'setProdFiltro'){
+      const f = t.dataset.filtro;
+      document.querySelectorAll('#pf-row .tab-btn').forEach(b=>b.classList.remove('active'));
+      t.classList.add('active');
+      prodFiltro = f; renderProd();
+    }
+  });
 </script>
 </body>
 </html>
